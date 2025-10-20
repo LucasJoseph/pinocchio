@@ -84,14 +84,25 @@ BOOST_AUTO_TEST_CASE(vsRandomForce)
   std::cout << "Random force:\n" << frandom.toVector() << std::endl;
   std::cout << "jdata.S():\n" << data.S.matrix() << std::endl;
   std::cout << "jdata.S().transpose():\n" << data.S.matrix().transpose() << std::endl;
-  data.S.matrix().transpose() * frandom.toVector();
+  
+  // Direct matrix multiplication works
+  Eigen::Vector3d tau1 = data.S.matrix().transpose() * frandom.toVector();
+  std::cout << "tau1 (S^T * f via matrix): \n" << tau1.transpose() << std::endl;
+
+  // Now data.S.transpose() * frandom works too (bug fixed!)
+  Eigen::Vector3d tau2 = data.S.transpose() * frandom;
+  std::cout << "tau2 (S^T * f via transpose): \n" << tau2.transpose() << std::endl;
+
+  // Verify both methods give the same result
+  BOOST_CHECK(tau1.isApprox(tau2));
+
+
+
+  // for later
   // addJointAndBody(modelEllipsoid, JointModelEllipsoid(1, 2,3), 0, pos, "ellipsoid", inertia);
   // addJointAndBody(modelFreeflyer, JointModelFreeFlyer(), 0, pos, "free-flyer", inertia);
 
   // Data dataEllipsoid(modelEllipsoid);
-
-
-
   // forwardKinematics(modelEllipsoid, dataEllipsoid, q, v);
 
   // Eigen::VectorXd tauEllipsoid = Eigen::VectorXd::Ones(modelEllipsoid.nv);
