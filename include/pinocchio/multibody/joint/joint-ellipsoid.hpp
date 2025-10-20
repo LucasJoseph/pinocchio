@@ -1,0 +1,509 @@
+//
+// Copyright (c) 2025 INRIA
+//
+
+#ifndef __pinocchio_multibody_joint_ellipsoid_hpp__
+#define __pinocchio_multibody_joint_ellipsoid_hpp__
+
+#include "pinocchio/macros.hpp"
+#include "pinocchio/multibody/joint/joint-base.hpp"
+#include "pinocchio/multibody/joint-motion-subspace.hpp"
+#include "pinocchio/math/sincos.hpp"
+#include "pinocchio/math/matrix.hpp"
+#include "pinocchio/spatial/inertia.hpp"
+#include "pinocchio/spatial/skew.hpp"
+#include "pinocchio/multibody/joint-motion-subspace.hpp" // because we are dense.
+
+namespace pinocchio
+{
+  template<typename Scalar, int Options>
+  struct JointEllipsoidTpl;
+
+  template<typename _Scalar, int _Options>
+  struct traits<JointEllipsoidTpl<_Scalar, _Options>>
+  {
+    enum
+    {
+      NQ = 3,
+      NV = 3,
+      NVExtended = 3
+    };
+    typedef _Scalar Scalar;
+    enum
+    {
+      Options = _Options
+    };
+    typedef JointDataEllipsoidTpl<Scalar, Options> JointDataDerived;
+    typedef JointModelEllipsoidTpl<Scalar, Options> JointModelDerived;
+    typedef JointMotionSubspaceTpl<3, Scalar, Options, 3> Constraint_t;
+    typedef SE3Tpl<Scalar, Options> Transformation_t;
+    
+    typedef MotionTpl<Scalar, Options> Motion_t;
+    typedef MotionTpl<Scalar, Options> Bias_t;
+
+    // [ABA]
+    typedef Eigen::Matrix<Scalar, 6, NV, Options> U_t;
+    typedef Eigen::Matrix<Scalar, NV, NV, Options> D_t;
+    typedef Eigen::Matrix<Scalar, 6, NV, Options> UD_t;
+
+    typedef Eigen::Matrix<Scalar, NQ, 1, Options> ConfigVector_t;
+    typedef Eigen::Matrix<Scalar, NV, 1, Options> TangentVector_t;
+
+    typedef boost::mpl::false_ is_mimicable_t; // not mimicable
+
+    PINOCCHIO_JOINT_DATA_BASE_ACCESSOR_DEFAULT_RETURN_TYPE
+  };
+
+  template<typename _Scalar, int _Options>
+  struct traits<JointDataEllipsoidTpl<_Scalar, _Options>>
+  {
+    typedef JointEllipsoidTpl<_Scalar, _Options> JointDerived;
+    typedef _Scalar Scalar;
+  };
+
+  template<typename _Scalar, int _Options>
+  struct traits<JointModelEllipsoidTpl<_Scalar, _Options>>
+  {
+    typedef JointEllipsoidTpl<_Scalar, _Options> JointDerived;
+    typedef _Scalar Scalar;
+  };
+
+  template<typename _Scalar, int _Options>
+  struct JointDataEllipsoidTpl
+  : public JointDataBase<JointDataEllipsoidTpl<_Scalar, _Options>>
+  {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    typedef JointEllipsoidTpl<_Scalar, _Options> JointDerived;
+    PINOCCHIO_JOINT_DATA_TYPEDEF_TEMPLATE(JointDerived);
+    PINOCCHIO_JOINT_DATA_BASE_DEFAULT_ACCESSOR // macro - colle a la compilation.
+
+    ConfigVector_t joint_q;
+    TangentVector_t joint_v;
+
+    Constraint_t S;
+    Constraint_t Sdot;
+    Transformation_t M;
+    Motion_t v;
+    Bias_t c;
+
+    // [ABA] specific data
+    U_t U;
+    D_t Dinv;
+    UD_t UDinv;
+    D_t StU;
+
+    JointDataEllipsoidTpl()
+    : joint_q(ConfigVector_t::Zero())
+    , joint_v(TangentVector_t::Zero())
+    , M(Transformation_t::Identity())
+    , v(Motion_t::Zero())
+    , c(Bias_t::Zero())
+    , U(U_t::Zero())
+    , Dinv(D_t::Zero())
+    , UDinv(UD_t::Zero())
+    , StU(D_t::Zero())
+    {
+    }
+
+    static std::string classname()
+    {
+      return std::string("JointDataEllipsoid");
+    }
+    std::string shortname() const
+    {
+      return classname();
+    }
+
+  }; // struct JointDataEllipsoidTpl
+
+  PINOCCHIO_JOINT_CAST_TYPE_SPECIALIZATION(JointModelEllipsoidTpl);
+  template<typename _Scalar, int _Options>
+  struct JointModelEllipsoidTpl
+  : public JointModelBase<JointModelEllipsoidTpl<_Scalar, _Options>>
+  {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    typedef JointEllipsoidTpl<_Scalar, _Options> JointDerived;
+    PINOCCHIO_JOINT_TYPEDEF_TEMPLATE(JointDerived);
+
+    typedef JointModelBase<JointModelEllipsoidTpl> Base;
+    using Base::id;
+    using Base::idx_q;
+    using Base::idx_v;
+    using Base::idx_vExtended;
+    using Base::setIndexes;
+    Scalar radius_a;
+    Scalar radius_b;
+    Scalar radius_c;
+
+    JointDataDerived createData() const
+    {
+      return JointDataDerived();
+    }
+
+    JointModelEllipsoidTpl()
+    {
+      radius_a = Scalar(0.01);
+      radius_b = Scalar(0.01);
+      radius_c = Scalar(0.01);
+    }
+
+    explicit JointModelEllipsoidTpl(
+      const Scalar & a,
+      const Scalar & b,
+      const Scalar & c)
+    : radius_a(a), radius_b(b), radius_c(c)
+    {
+    }
+
+    const std::vector<bool> hasConfigurationLimit() const
+    {
+      return {true, true, true};
+    }
+
+    const std::vector<bool> hasConfigurationLimitInTangent() const
+    {
+      return {true, true, true};
+    }
+
+    template<typename ConfigVector>
+    void calc(JointDataDerived & data, const typename Eigen::MatrixBase<ConfigVector> & qs) const
+    // qs is the full configuration vector of the multibody system
+    {
+      // C'est ici que ça commence.
+      // only the q of the joint is needed.
+      data.joint_q = qs.template segment<NQ>(idx_q());
+
+      Scalar c0, s0;
+      SINCOS(data.joint_q(0), &s0, &c0);
+      Scalar c1, s1;
+      SINCOS(data.joint_q(1), &s1, &c1);
+      Scalar c2, s2;
+      SINCOS(data.joint_q(2), &s2, &c2);
+
+      // data.M.rotation() << 
+      // c0 * c1, 
+      // c0 * s1 * s2 - s0 * c2, 
+      // c0 * s1 * c2 + s0 * s2, 
+      // s0 * c1,
+      // s0 * s1 * s2 + c0 * c2, 
+      // s0 * s1 * c2 - c0 * s2,
+      // -s1, 
+      // c1 * s2, 
+      // c1 * c2;
+      // moi je peux directement faire
+      // data.M.rotation() << ...
+      // data.M.translation() << ...
+
+      //common operations
+      Scalar c1c2, c1s2;
+      c1c2 = c1 * c2;
+      c1s2 = c1 * s2;
+
+      data.M.rotation() << 
+      c1c2, 
+      -c1s2, 
+      s1,
+      c0 * s2 + c2 * s0 * s1, 
+      c0 * c2 - s0 * s1 * s2,
+       -c1 * s0, 
+       -c0 * c2 * s1 + s0 * s2,
+        c0 * s1 * s2 + c2 * s0,
+         c0 * c1;
+
+      Scalar nx, ny, nz;
+      nx = s1;
+      ny = -s0 * c1;
+      nz = c0 * c1;
+
+      // @Megane: est-ce que c'est la bonne façon de récupérer les rayons ?
+      data.M.translation() << radius_a * nx, radius_b * ny, radius_c * nz;
+      
+      // moi ça doit etre dense
+      // data.S.angularSubspace() << -s1, Scalar(0), Scalar(1), c1 * s2, c2, Scalar(0), c1 * c2, -s2,
+      //  Scalar(0);
+      // je remplis aussi ligne par ligne d'une matrice 6x3
+      data.S.matrix() << c1c2, s2, Scalar(0),
+                        -c1s2, c2, Scalar(0),
+                        s1, Scalar(0), Scalar(1),
+                        c1 * (-radius_b * s0 * s1 + radius_c * c0 * c1 * s2),
+                        c1 * (radius_a - radius_c * c0 * c2),
+                        -radius_b * c1 * s0,
+                        -radius_a * s1 * s1 - radius_b * c0 * c1 + radius_c * c0 * c1 * c1 * c2,
+                        radius_b * s0 * s1 + radius_c * c0 * c1 * s2,
+                        radius_a * s1,
+                        c1 * (radius_a * s1 * s2 + radius_b * c1 * c2 * s0 - radius_c * s0),
+                        radius_a * c2 * s1 + radius_b * c1 * s0 * s2 + radius_c * c0 * s1,
+                        Scalar(0);
+    }
+
+    template<typename TangentVector>
+    void
+    calc(JointDataDerived & data, const Blank, const typename Eigen::MatrixBase<TangentVector> & vs)
+      const
+    {
+      // data.joint_v = vs.template segment<NV>(idx_v());
+
+      // // data.v = data.S.matrix() * data.joint_v;
+
+      // Scalar c0, s0;
+      // SINCOS(data.joint_q(0), &s0, &c0);
+      // Scalar c1, s1;
+      // SINCOS(data.joint_q(1), &s1, &c1);
+      // Scalar c2, s2;
+      // SINCOS(data.joint_q(2), &s2, &c2);
+
+      // Scalar qdot0, qdot1, qdot2;
+      // qdot0 = data.joint_v(0);
+      // qdot1 = data.joint_v(1);
+      // qdot2 = data.joint_v(2);
+
+      // Scalar Sdot_11, Sdot_21, Sdot_31, Sdot_41, Sdot_51, Sdot_61;
+      // Scalar Sdot_12, Sdot_22, Sdot_32, Sdot_42, Sdot_52, Sdot_62;
+      // Scalar Sdot_13, Sdot_23, Sdot_33, Sdot_43, Sdot_53, Sdot_63;
+      
+
+      // // Upper part (angular)
+      // Sdot_11 = - (qdot1 * c2 * s1 + qdot2 * c1 * s2);
+      // Sdot_21 =  qdot1 * s1 * s2 - qdot2 * c1 * c2;
+      // Sdot_31 =  qdot1 * c1;
+
+      // Sdot_12 = qdot2 * c2;
+      // Sdot_22 = - qdot2 * s2;
+      // Sdot_32 = Scalar(0);
+
+      // Sdot_13 = Scalar(0);
+      // Sdot_23 = Scalar(0);
+      // Sdot_33 = Scalar(0);
+
+      // // Lower part (linear)
+      // Sdot_41 = - qdot0 *c1 * (radius_b * c0 * s1 + radius_c * c0 * s0 * s2)
+      //            + qdot1 * (-2 * radius_b * c1 * c1 * s0 + radius_b * s0 - 2 * radius_c * c0 * c1 * s1 * s2)
+      //            + qdot2 * - radius_c * c0 * c1 * c1 * s2;
+      // Sdot_51 =  qdot0 * c1 * s0 *(radius_b - radius_c * c1 * c2)
+      //            - qdot1 * s1 * ( 2 * radius_a * c1 - radius_b * c0 + 2 * radius_c * c0 * c1 * c2)
+      //             + qdot2 * radius_c * c0 * c1 * c1 * s2;
+      // Sdot_61 =  qdot0 * c0 * c1 *(radius_b * c1 * c2 - radius_c)
+      //             + qdot1 * ( - 2 * radius_a *c1 * c1 * s2 + + radius_a * s2 - 2 * radius_b *c1 * c2 * s0 * s1)
+      //             + qdot2 * c1 * (radius_a * c2 * s1 + radius_b * c1 * s0 * s2);
+
+      // Sdot_42 = qdot0 * radius_c * c1 * c2 * s0
+      //             - qdot1 * s1 * (radius_b * c1 * s0 - radius_c * c0 * s1 * s2)
+      //             + qdot2 * radius_c * c0 * c1 * c2;
+      // Sdot_52 = - qdot0 * (radius_b * c0 * c1 * s2 + radius_c * c1 *s0 * s2)
+      //             + qdot1 *(radius_b * c1 * s0 - radius_c * c0 * s1 * s2) 
+      //             + qdot2 * radius_c * c0 * c1 * c2;
+      // Sdot_62 = qdot0 * (radius_b * c0 *c1*s2 +radius_c *s0*s1)
+      //             - qdot1 * (- radius_a * c1 * c2 + radius_b * s0 * s1 * s2 + radius_c * c0 * c1)
+      //             - qdot2 * (radius_a * s1 * s2 - radius_b * c1 * c2 * s0);
+
+      // Sdot_43 = radius_b * (-qdot0 * c0 * c1 + qdot1 * s0 * s1);
+      // Sdot_53 = -qdot1 * radius_a * c1;
+      // Sdot_63 = Scalar(0);
+
+      // // data.Sdot.matrix() << Sdot_11, Sdot_12, Sdot_13,
+      // //                       Sdot_21, Sdot_22, Sdot_23,
+      // //                       Sdot_31, Sdot_32, Sdot_33,
+      // //                       Sdot_41, Sdot_42, Sdot_43,
+      // //                       Sdot_51, Sdot_52, Sdot_53,
+      // //                       Sdot_61, Sdot_62, Sdot_63;
+
+      // // data.c = data.Sdot.matrix() * data.joint_v;
+    }
+
+    template<typename ConfigVector, typename TangentVector>
+    void calc(
+      JointDataDerived & data,
+      const typename Eigen::MatrixBase<ConfigVector> & qs,
+      const typename Eigen::MatrixBase<TangentVector> & vs) const
+    {
+      // // C'est ici que ça commence.
+      // // only the q of the joint is needed.
+      // data.joint_q = qs.template segment<NQ>(idx_q());
+
+      // Scalar c0, s0;
+      // SINCOS(data.joint_q(0), &s0, &c0);
+      // Scalar c1, s1;
+      // SINCOS(data.joint_q(1), &s1, &c1);
+      // Scalar c2, s2;
+      // SINCOS(data.joint_q(2), &s2, &c2);
+
+      // // data.M.rotation() << 
+      // // c0 * c1, 
+      // // c0 * s1 * s2 - s0 * c2, 
+      // // c0 * s1 * c2 + s0 * s2, 
+      // // s0 * c1,
+      // // s0 * s1 * s2 + c0 * c2, 
+      // // s0 * s1 * c2 - c0 * s2,
+      // // -s1, 
+      // // c1 * s2, 
+      // // c1 * c2;
+      // // moi je peux directement faire
+      // // data.M.rotation() << ...
+      // // data.M.translation() << ...
+
+      // //common operations
+      // Scalar c1c2, c1s2;
+      // c1c2 = c1 * c2;
+      // c1s2 = c1 * s2;
+
+      // data.M.rotation() << c1c2, -c1s2, s1, c0 * s2 + c2 * s0 * s1, c0 * c2 - s0 * s1 * s2,
+      //  -c1 * s0, -c0 * c2 * s1 + s0 * s2, c0 * s1 * s2 + c2 * s0, c0 * c1;
+
+      // Scalar nx, ny, nz;
+      // nx = s1;
+      // ny = -s0 * c1;
+      // nz = c0 * c1;
+
+      // // @Megane: est-ce que c'est la bonne façon de récupérer les rayons ?
+      // data.M.translation() << radius_a * nx, radius_b * ny, radius_c * nz;
+      
+      // // moi ça doit etre dense
+      // // data.S.angularSubspace() << -s1, Scalar(0), Scalar(1), c1 * s2, c2, Scalar(0), c1 * c2, -s2,
+      // //  Scalar(0);
+      // // je remplis aussi ligne par ligne d'une matrice 6x3
+      // data.S.matrix() << c1c2, s2, Scalar(0),
+      //                   -c1s2, c2, 0,
+      //                   s1, 0, 1,
+      //                   c1 * (-radius_b * s0 * s1 + radius_c * c0 * c1 * s2),
+      //                   c1 * (radius_a - radius_c * c0 * c2),
+      //                   -radius_b * c1 * s0,
+      //                   -radius_a * s1 * s1 - radius_b * c0 * c1 + radius_c * c0 * c1 * c1 * c2,
+      //                   radius_b * s0 * s1 + radius_c * c0 * c1 * s2,
+      //                   radius_a * s1,
+      //                   c1 * (radius_a * s1 * s2 + radius_b * c1 * c2 * s0 - radius_c * s0);
+      //                   radius_a * c2 * s1 + radius_b * c1 * s0 * s2 + radius_c * c0 * s1,
+      //                   0;
+
+      // data.joint_v = vs.template segment<NV>(idx_v());
+
+      // // data.v = data.S.matrix() * data.joint_v;
+
+      // Scalar qdot0, qdot1, qdot2;
+      // qdot0 = data.joint_v(0);
+      // qdot1 = data.joint_v(1);
+      // qdot2 = data.joint_v(2);
+
+      // Scalar Sdot_11, Sdot_21, Sdot_31, Sdot_41, Sdot_51, Sdot_61;
+      // Scalar Sdot_12, Sdot_22, Sdot_32, Sdot_42, Sdot_52, Sdot_62;
+      // Scalar Sdot_13, Sdot_23, Sdot_33, Sdot_43, Sdot_53, Sdot_63;
+      
+
+      // // Upper part (angular)
+      // Sdot_11 = - (qdot1 * c2 * s1 + qdot2 * c1 * s2);
+      // Sdot_21 =  qdot1 * s1 * s2 - qdot2 * c1 * c2;
+      // Sdot_31 =  qdot1 * c1;
+
+      // Sdot_12 = qdot2 * c2;
+      // Sdot_22 = - qdot2 * s2;
+      // Sdot_32 = Scalar(0);
+
+      // Sdot_13 = Scalar(0);
+      // Sdot_23 = Scalar(0);
+      // Sdot_33 = Scalar(0);
+
+      // // Lower part (linear)
+      // Sdot_41 = - qdot0 *c1 * (radius_b * c0 * s1 + radius_c * c0 * s0 * s2)
+      //            + qdot1 * (-2 * radius_b * c1 * c1 * s0 + radius_b * s0 - 2 * radius_c * c0 * c1 * s1 * s2)
+      //            + qdot2 * - radius_c * c0 * c1 * c1 * s2;
+      // Sdot_51 =  qdot0 * c1 * s0 *(radius_b - radius_c * c1 * c2)
+      //            - qdot1 * s1 * ( 2 * radius_a * c1 - radius_b * c0 + 2 * radius_c * c0 * c1 * c2)
+      //             + qdot2 * radius_c * c0 * c1 * c1 * s2;
+      // Sdot_61 =  qdot0 * c0 * c1 *(radius_b * c1 * c2 - radius_c)
+      //             + qdot1 * ( - 2 * radius_a *c1 * c1 * s2 + + radius_a * s2 - 2 * radius_b *c1 * c2 * s0 * s1)
+      //             + qdot2 * c1 * (radius_a * c2 * s1 + radius_b * c1 * s0 * s2);
+
+      // Sdot_42 = qdot0 * radius_c * c1 * c2 * s0
+      //             - qdot1 * s1 * (radius_b * c1 * s0 - radius_c * c0 * s1 * s2)
+      //             + qdot2 * radius_c * c0 * c1 * c2;
+      // Sdot_52 = - qdot0 * (radius_b * c0 * c1 * s2 + radius_c * c1 *s0 * s2)
+      //             + qdot1 *(radius_b * c1 * s0 - radius_c * c0 * s1 * s2) 
+      //             + qdot2 * radius_c * c0 * c1 * c2;
+      // Sdot_62 = qdot0 * (radius_b * c0 *c1*s2 +radius_c *s0*s1)
+      //             - qdot1 * (- radius_a * c1 * c2 + radius_b * s0 * s1 * s2 + radius_c * c0 * c1)
+      //             - qdot2 * (radius_a * s1 * s2 - radius_b * c1 * c2 * s0);
+
+      // Sdot_43 = radius_b * (-qdot0 * c0 * c1 + qdot1 * s0 * s1);
+      // Sdot_53 = -qdot1 * radius_a * c1;
+      // Sdot_63 = Scalar(0);
+
+      // data.Sdot.matrix() << Sdot_11, Sdot_12, Sdot_13,
+      //                       Sdot_21, Sdot_22, Sdot_23,
+      //                       Sdot_31, Sdot_32, Sdot_33,
+      //                       Sdot_41, Sdot_42, Sdot_43,
+      //                       Sdot_51, Sdot_52, Sdot_53,
+      //                       Sdot_61, Sdot_62, Sdot_63;
+
+      // // data.c = data.Sdot.matrix() * data.joint_v;
+     }
+
+    template<typename VectorLike, typename Matrix6Like>
+    void calc_aba(
+      JointDataDerived & data,
+      const Eigen::MatrixBase<VectorLike> & armature,
+      const Eigen::MatrixBase<Matrix6Like> & I,
+      const bool update_I) const
+    {
+      data.U.noalias() = I * data.S.matrix();
+      data.StU.noalias() = data.S.transpose() * data.U;
+      data.StU.diagonal() += armature;
+      internal::PerformStYSInversion<Scalar>::run(data.StU, data.Dinv);
+
+      data.UDinv.noalias() = data.U * data.Dinv;
+
+      if (update_I)
+        PINOCCHIO_EIGEN_CONST_CAST(Matrix6Like, I).noalias() -= data.UDinv * data.U.transpose();
+    }
+
+    static std::string classname()
+    {
+      return std::string("JointModelEllipsoid");
+    }
+    std::string shortname() const
+    {
+      return classname();
+    }
+
+    /// \returns An expression of *this with the Scalar type casted to NewScalar.
+    template<typename NewScalar>
+    JointModelEllipsoidTpl<NewScalar, Options> cast() const
+    {
+      typedef JointModelEllipsoidTpl<NewScalar, Options> ReturnType;
+      ReturnType res;
+      res.setIndexes(id(), idx_q(), idx_v(), idx_vExtended());
+      return res;
+    }
+
+  }; // struct JointModelEllipsoidTpl
+
+} // namespace pinocchio
+
+#include <boost/type_traits.hpp>
+
+namespace boost
+{
+  template<typename Scalar, int Options>
+  struct has_nothrow_constructor<::pinocchio::JointModelEllipsoidTpl<Scalar, Options>>
+  : public integral_constant<bool, true>
+  {
+  };
+
+  template<typename Scalar, int Options>
+  struct has_nothrow_copy<::pinocchio::JointModelEllipsoidTpl<Scalar, Options>>
+  : public integral_constant<bool, true>
+  {
+  };
+
+  template<typename Scalar, int Options>
+  struct has_nothrow_constructor<::pinocchio::JointDataEllipsoidTpl<Scalar, Options>>
+  : public integral_constant<bool, true>
+  {
+  };
+
+  template<typename Scalar, int Options>
+  struct has_nothrow_copy<::pinocchio::JointDataEllipsoidTpl<Scalar, Options>>
+  : public integral_constant<bool, true>
+  {
+  };
+} // namespace boost
+
+#endif // ifndef __pinocchio_multibody_joint_spherical_ZYX_hpp__
