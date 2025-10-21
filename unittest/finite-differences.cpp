@@ -163,6 +163,23 @@ struct init<pinocchio::JointModelHelicalTpl<Scalar, Options, axis>>
   }
 };
 
+template<typename Scalar, int Options>
+struct init<pinocchio::JointModelEllipsoidTpl<Scalar, Options>>
+{
+  typedef pinocchio::JointModelEllipsoidTpl<Scalar, Options> JointModel;
+
+  static JointModel run()
+  {
+    JointModel jmodel(Scalar(0.01),
+                      Scalar(0),
+                      Scalar(0)
+                      );
+
+    jmodel.setIndexes(0, 0, 0);
+    return jmodel;
+  }
+};
+
 template<typename Scalar, int Options, template<typename, int> class JointCollection>
 struct init<pinocchio::JointModelTpl<Scalar, Options, JointCollection>>
 {
@@ -236,11 +253,15 @@ struct FiniteDiffJoint
     typedef JointDataBase<typename JointModel::JointDataDerived> DataBaseType;
     DataBaseType & jdata = static_cast<DataBaseType &>(jdata_);
 
+    std::cout << std::setprecision(15);
+
     CV q = LieGroupType().random();
+    std::cout << "q: " << q << std::endl;
     jmodel.calc(jdata.derived(), q);
     SE3 M_ref(jdata.M());
 
     CV q_int(q);
+    std::cout << "q_int: " << q_int << std::endl;
     const Eigen::DenseIndex nv = jdata.S().nv();
     TV v(nv);
     v.setZero();
@@ -248,10 +269,14 @@ struct FiniteDiffJoint
 
     Eigen::Matrix<double, 6, JointModel::NV> S(6, nv), S_ref(jdata.S().matrix());
 
+    std::cout << "M_ref: " << M_ref << std::endl;
+
     for (int k = 0; k < nv; ++k)
     {
       v[k] = eps;
       q_int = LieGroupType().integrate(q, v);
+      std::cout << "k: " << k << std::endl;
+      std::cout << "q_int: " << q_int << std::endl;
       jmodel.calc(jdata.derived(), q_int);
       SE3 M_int = jdata.M();
 

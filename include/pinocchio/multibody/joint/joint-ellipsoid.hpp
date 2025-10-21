@@ -196,12 +196,12 @@ namespace pinocchio
 
       data.M.translation() << radius_a * nx, radius_b * ny, radius_c * nz;
       
-      data.S.matrix() << c1c2, s2, Scalar(0),
-                        -c1s2, c2, Scalar(0),
-                        s1, Scalar(0), Scalar(1),
-                        c1 * (-radius_b * s0 * s1 + radius_c * c0 * c1 * s2), c1 * (radius_a - radius_c * c0 * c2), -radius_b * c1 * s0,
+      data.S.matrix() << c1 * (-radius_b * s0 * s1 + radius_c * c0 * c1 * s2), c1 * (radius_a - radius_c * c0 * c2), -radius_b * c1 * s0,
                         -radius_a * s1 * s1 - radius_b * c0 * c1 + radius_c * c0 * c1 * c1 * c2, radius_b * s0 * s1 + radius_c * c0 * c1 * s2, radius_a * s1,
-                        c1 * (radius_a * s1 * s2 + radius_b * c1 * c2 * s0 - radius_c * s0), radius_a * c2 * s1 + radius_b * c1 * s0 * s2 + radius_c * c0 * s1, Scalar(0);
+                        c1 * (radius_a * s1 * s2 + radius_b * c1 * c2 * s0 - radius_c * s0), radius_a * c2 * s1 + radius_b * c1 * s0 * s2 + radius_c * c0 * s1, Scalar(0),
+                        c1c2, s2, Scalar(0),
+                        -c1s2, c2, Scalar(0),
+                        s1, Scalar(0), Scalar(1);
     }
 
     template<typename TangentVector>
@@ -240,45 +240,44 @@ namespace pinocchio
       Scalar Sdot_11, Sdot_21, Sdot_31, Sdot_41, Sdot_51, Sdot_61;
       Scalar Sdot_12, Sdot_22, Sdot_32, Sdot_42, Sdot_52, Sdot_62;
       Scalar Sdot_13, Sdot_23, Sdot_33, Sdot_43, Sdot_53, Sdot_63;
-      
 
-      // Upper part (angular)
-      Sdot_11 = - (qdot1 * c2 * s1 + qdot2 * c1 * s2);
-      Sdot_21 =  qdot1 * s1 * s2 - qdot2 * c1 * c2;
-      Sdot_31 =  qdot1 * c1;
+      // Lower part (angular)
+      Sdot_41 = - (qdot1 * c2 * s1 + qdot2 * c1 * s2);
+      Sdot_51 =  qdot1 * s1 * s2 - qdot2 * c1 * c2;
+      Sdot_61 =  qdot1 * c1;
 
-      Sdot_12 = qdot2 * c2;
-      Sdot_22 = - qdot2 * s2;
-      Sdot_32 = Scalar(0);
+      Sdot_42 = qdot2 * c2;
+      Sdot_52 = - qdot2 * s2;
+      Sdot_62 = Scalar(0);
 
-      Sdot_13 = Scalar(0);
-      Sdot_23 = Scalar(0);
-      Sdot_33 = Scalar(0);
+      Sdot_43 = Scalar(0);
+      Sdot_53 = Scalar(0);
+      Sdot_63 = Scalar(0);
 
-      // Lower part (linear)
-      Sdot_41 = - qdot0 *c1 * (radius_b * c0 * s1 + radius_c * c0 * s0 * s2)
+      // Upper part (linear)
+      Sdot_11 = - qdot0 *c1 * (radius_b * c0 * s1 + radius_c * c0 * s0 * s2)
                  + qdot1 * (-2 * radius_b * c1 * c1 * s0 + radius_b * s0 - 2 * radius_c * c0 * c1 * s1 * s2)
                  + qdot2 * - radius_c * c0 * c1 * c1 * s2;
-      Sdot_51 =  qdot0 * c1 * s0 *(radius_b - radius_c * c1 * c2)
+      Sdot_21 =  qdot0 * c1 * s0 *(radius_b - radius_c * c1 * c2)
                  - qdot1 * s1 * ( 2 * radius_a * c1 - radius_b * c0 + 2 * radius_c * c0 * c1 * c2)
                   + qdot2 * radius_c * c0 * c1 * c1 * s2;
-      Sdot_61 =  qdot0 * c0 * c1 *(radius_b * c1 * c2 - radius_c)
+      Sdot_31 =  qdot0 * c0 * c1 *(radius_b * c1 * c2 - radius_c)
                   + qdot1 * ( - 2 * radius_a *c1 * c1 * s2 + + radius_a * s2 - 2 * radius_b *c1 * c2 * s0 * s1)
                   + qdot2 * c1 * (radius_a * c2 * s1 + radius_b * c1 * s0 * s2);
 
-      Sdot_42 = qdot0 * radius_c * c1 * c2 * s0
+      Sdot_12 = qdot0 * radius_c * c1 * c2 * s0
                   - qdot1 * s1 * (radius_b * c1 * s0 - radius_c * c0 * s1 * s2)
                   + qdot2 * radius_c * c0 * c1 * c2;
-      Sdot_52 = - qdot0 * (radius_b * c0 * c1 * s2 + radius_c * c1 *s0 * s2)
+      Sdot_22 = - qdot0 * (radius_b * c0 * c1 * s2 + radius_c * c1 *s0 * s2)
                   + qdot1 *(radius_b * c1 * s0 - radius_c * c0 * s1 * s2) 
                   + qdot2 * radius_c * c0 * c1 * c2;
-      Sdot_62 = qdot0 * (radius_b * c0 *c1*s2 +radius_c *s0*s1)
+      Sdot_32 = qdot0 * (radius_b * c0 *c1*s2 +radius_c *s0*s1)
                   - qdot1 * (- radius_a * c1 * c2 + radius_b * s0 * s1 * s2 + radius_c * c0 * c1)
                   - qdot2 * (radius_a * s1 * s2 - radius_b * c1 * c2 * s0);
 
-      Sdot_43 = radius_b * (-qdot0 * c0 * c1 + qdot1 * s0 * s1);
-      Sdot_53 = -qdot1 * radius_a * c1;
-      Sdot_63 = Scalar(0);
+      Sdot_13 = radius_b * (-qdot0 * c0 * c1 + qdot1 * s0 * s1);
+      Sdot_23 = -qdot1 * radius_a * c1;
+      Sdot_33 = Scalar(0);
 
       data.Sdot.matrix() << Sdot_11, Sdot_12, Sdot_13,
                             Sdot_21, Sdot_22, Sdot_23,
@@ -320,7 +319,7 @@ namespace pinocchio
       ny = -s0 * c1;
       nz = c0 * c1;
 
-      data.M.translation() << radius_a * nx, radius_b * ny, radius_c * nz;
+      data.M.translation() << Scalar(0.01) * nx, radius_b * ny, radius_c * nz;
       
       data.S.matrix() << c1c2, s2, Scalar(0),
                         -c1s2, c2, Scalar(0),
@@ -343,43 +342,43 @@ namespace pinocchio
       Scalar Sdot_12, Sdot_22, Sdot_32, Sdot_42, Sdot_52, Sdot_62;
       Scalar Sdot_13, Sdot_23, Sdot_33, Sdot_43, Sdot_53, Sdot_63;
       
-      // Upper part (angular)
-      Sdot_11 = -(qdot1 * c2 * s1 + qdot2 * c1 * s2);
-      Sdot_21 = qdot1 * s1 * s2 - qdot2 * c1 * c2;
-      Sdot_31 = qdot1 * c1;
+      // Lower part (angular)
+      Sdot_41 = -(qdot1 * c2 * s1 + qdot2 * c1 * s2);
+      Sdot_51 = qdot1 * s1 * s2 - qdot2 * c1 * c2;
+      Sdot_61 = qdot1 * c1;
 
-      Sdot_12 = qdot2 * c2;
-      Sdot_22 = -qdot2 * s2;
-      Sdot_32 = Scalar(0);
+      Sdot_42 = qdot2 * c2;
+      Sdot_52 = -qdot2 * s2;
+      Sdot_62 = Scalar(0);
 
-      Sdot_13 = Scalar(0);
-      Sdot_23 = Scalar(0);
-      Sdot_33 = Scalar(0);
+      Sdot_43 = Scalar(0);
+      Sdot_53 = Scalar(0);
+      Sdot_63 = Scalar(0);
 
       // Lower part (linear)
-      Sdot_41 = -qdot0 * c1 * (radius_b * c0 * s1 + radius_c * c0 * s0 * s2)
+      Sdot_11 = -qdot0 * c1 * (radius_b * c0 * s1 + radius_c * c0 * s0 * s2)
                 + qdot1 * (-2 * radius_b * c1 * c1 * s0 + radius_b * s0 - 2 * radius_c * c0 * c1 * s1 * s2)
                 + qdot2 * -radius_c * c0 * c1 * c1 * s2;
-      Sdot_51 = qdot0 * c1 * s0 * (radius_b - radius_c * c1 * c2)
+      Sdot_21 = qdot0 * c1 * s0 * (radius_b - radius_c * c1 * c2)
                 - qdot1 * s1 * (2 * radius_a * c1 - radius_b * c0 + 2 * radius_c * c0 * c1 * c2)
                 + qdot2 * radius_c * c0 * c1 * c1 * s2;
-      Sdot_61 = qdot0 * c0 * c1 * (radius_b * c1 * c2 - radius_c)
+      Sdot_31 = qdot0 * c0 * c1 * (radius_b * c1 * c2 - radius_c)
                 + qdot1 * (-2 * radius_a * c1 * c1 * s2 + radius_a * s2 - 2 * radius_b * c1 * c2 * s0 * s1)
                 + qdot2 * c1 * (radius_a * c2 * s1 + radius_b * c1 * s0 * s2);
 
-      Sdot_42 = qdot0 * radius_c * c1 * c2 * s0
+      Sdot_12 = qdot0 * radius_c * c1 * c2 * s0
                 - qdot1 * s1 * (radius_b * c1 * s0 - radius_c * c0 * s1 * s2)
                 + qdot2 * radius_c * c0 * c1 * c2;
-      Sdot_52 = -qdot0 * (radius_b * c0 * c1 * s2 + radius_c * c1 * s0 * s2)
+      Sdot_22 = -qdot0 * (radius_b * c0 * c1 * s2 + radius_c * c1 * s0 * s2)
                 + qdot1 * (radius_b * c1 * s0 - radius_c * c0 * s1 * s2)
                 + qdot2 * radius_c * c0 * c1 * c2;
-      Sdot_62 = qdot0 * (radius_b * c0 * c1 * s2 + radius_c * s0 * s1)
+      Sdot_32 = qdot0 * (radius_b * c0 * c1 * s2 + radius_c * s0 * s1)
                 - qdot1 * (-radius_a * c1 * c2 + radius_b * s0 * s1 * s2 + radius_c * c0 * c1)
                 - qdot2 * (radius_a * s1 * s2 - radius_b * c1 * c2 * s0);
 
-      Sdot_43 = radius_b * (-qdot0 * c0 * c1 + qdot1 * s0 * s1);
-      Sdot_53 = -qdot1 * radius_a * c1;
-      Sdot_63 = Scalar(0);
+      Sdot_13 = radius_b * (-qdot0 * c0 * c1 + qdot1 * s0 * s1);
+      Sdot_23 = -qdot1 * radius_a * c1;
+      Sdot_33 = Scalar(0);
 
       data.Sdot.matrix() << Sdot_11, Sdot_12, Sdot_13,
                             Sdot_21, Sdot_22, Sdot_23,

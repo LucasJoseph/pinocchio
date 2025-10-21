@@ -61,8 +61,8 @@ BOOST_AUTO_TEST_CASE(vsFreeFlyer)
   Eigen::VectorXd aEllipsoid = Eigen::VectorXd::Ones(modelEllipsoid.nv);
 
   // ForwardDynamics == aba
-  // Eigen::VectorXd aAbaEllipsoid =
-  //  aba(modelEllipsoid, dataEllipsoid, q, v, tauEllipsoid, Convention::WORLD);
+  Eigen::VectorXd aAbaEllipsoid =
+  aba(modelEllipsoid, dataEllipsoid, q, v, tauEllipsoid, Convention::WORLD);
 
   // Calculer jdata.S().transpose() * data.f[i]
 }
@@ -96,7 +96,30 @@ BOOST_AUTO_TEST_CASE(vsRandomForce)
   // Verify both methods give the same result
   BOOST_CHECK(tau1.isApprox(tau2));
 
+  Model modelComposite;
 
+  Inertia inertia(1., Vector3(0.5, 0., 0.0), Matrix3::Identity());
+  SE3 pos(1);
+  pos.translation() = SE3::LinearType(1., 0., 0.);
+
+  JointModelComposite jmodel_composite((JointModelRZ()));
+  jmodel_composite.addJoint(JointModelRY());
+  jmodel_composite.addJoint(JointModelRX());
+
+
+  addJointAndBody(modelComposite, jmodel_composite, 0, pos, "composite", inertia);
+  Data dataComposite(modelComposite);
+
+
+  Eigen::VectorXd q = Eigen::VectorXd::Ones(modelComposite.nq);
+  Eigen::VectorXd v = Eigen::VectorXd::Ones(modelComposite.nv);
+
+  forwardKinematics(modelComposite, dataComposite, q, v);
+
+  Eigen::VectorXd tau = Eigen::VectorXd::Ones(modelComposite.nv);
+
+  // ABA
+  aba(modelComposite,dataComposite,q,v,tau);
 
   // for later
   // addJointAndBody(modelEllipsoid, JointModelEllipsoid(1, 2,3), 0, pos, "ellipsoid", inertia);
@@ -117,3 +140,13 @@ BOOST_AUTO_TEST_CASE(vsRandomForce)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+// BEAU TEST
+// Comparer spherical zyx avec ellipsoid
+// base sur helical et universal
+// vsPXRX ça teste les rotations
+// {
+    // TODO
+// }
+
+// Test translations
