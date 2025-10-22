@@ -244,6 +244,14 @@ namespace pinocchio
       Scalar c1c2, c1s2;
       c1c2 = c1 * c2;
       c1s2 = c1 * s2;
+      
+      Scalar dndotx_dqdot1, dndoty_dqdot0, dndoty_dqdot1, dndotz_dqdot0, dndotz_dqdot1;
+      dndotx_dqdot1 = c1;
+      dndoty_dqdot0 = - c0 * c1;
+      dndoty_dqdot1 = s0 * s1;
+      dndotz_dqdot0 = - c1 * s0;
+      dndotz_dqdot1 = - c0 * s1;
+
 
       Scalar S_11, S_21, S_31, S_12, S_22, S_32;
       // S_11 = c1 * (-radius_b * c0 * (c0 * s2 + c2 * s0 * s1) - radius_c * s0 * (- c0 * c2 * s1 + s0 * s2));
