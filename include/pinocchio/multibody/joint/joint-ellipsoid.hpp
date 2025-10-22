@@ -449,7 +449,6 @@ namespace pinocchio
       const typename Eigen::MatrixBase<ConfigVector> & qs,
       const typename Eigen::MatrixBase<TangentVector> & vs) const
     {
-      // Configuration part
       data.joint_q = qs.template segment<NQ>(idx_q());
 
       Scalar c0, s0;
@@ -467,7 +466,7 @@ namespace pinocchio
       data.M.rotation() << c1c2, -c1s2, s1,
                             c0 * s2 + c2 * s0 * s1, c0 * c2 - s0 * s1 * s2, -c1 * s0, 
                             -c0 * c2 * s1 + s0 * s2, c0 * s1 * s2 + c2 * s0, c0 * c1;
-
+      
       Scalar nx, ny, nz;
       nx = s1;
       ny = -s0 * c1;
@@ -475,7 +474,6 @@ namespace pinocchio
 
       data.M.translation() << radius_a * nx, radius_b * ny, radius_c * nz;
 
-      // First derivatives of n_dot with respect to q_dot
       Scalar dndotx_dqdot1, dndoty_dqdot0, dndoty_dqdot1, dndotz_dqdot0, dndotz_dqdot1;
       dndotx_dqdot1 = c1;
       dndoty_dqdot0 = - c0 * c1;
