@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Add docker images ([#2776](https://github.com/stack-of-tasks/pinocchio/pull/2776))
 - ROS: added jrl_cmakemodules dependency ([#2789](https://github.com/stack-of-tasks/pinocchio/pull/2789))
 
+### Added
+- Add Ellipsoid Joint to the joint collection, get ready for biomechanics. ([#....])(todo)
+
 ## [3.8.0] - 2025-09-17
 
 ### Added
