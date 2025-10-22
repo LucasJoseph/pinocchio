@@ -288,13 +288,6 @@ namespace pinocchio
       Scalar Sdot_12, Sdot_22, Sdot_32, Sdot_42, Sdot_52, Sdot_62;
       Scalar Sdot_13, Sdot_23, Sdot_33, Sdot_43, Sdot_53, Sdot_63;
 
-      Scalar dndotx_dqdot1, dndoty_dqdot0, dndoty_dqdot1, dndotz_dqdot0, dndotz_dqdot1;
-      dndotx_dqdot1 = c1;
-      dndoty_dqdot0 = - c0 * c1;
-      dndoty_dqdot1 = s0 * s1;
-      dndotz_dqdot0 = - c1 * s0;
-      dndotz_dqdot1 = - c0 * s1;
-
       // Derivative of dndotXX_dqdot0 with respect to q0 and q1
       Scalar d_dndotx_dqdot1_dq1 = - s1;      // dndotx_dqdot1 = c1;
 
