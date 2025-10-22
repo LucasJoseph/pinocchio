@@ -253,15 +253,11 @@ struct FiniteDiffJoint
     typedef JointDataBase<typename JointModel::JointDataDerived> DataBaseType;
     DataBaseType & jdata = static_cast<DataBaseType &>(jdata_);
 
-    std::cout << std::setprecision(15);
-
     CV q = LieGroupType().random();
-    std::cout << "q: " << q << std::endl;
     jmodel.calc(jdata.derived(), q);
     SE3 M_ref(jdata.M());
 
     CV q_int(q);
-    std::cout << "q_int: " << q_int << std::endl;
     const Eigen::DenseIndex nv = jdata.S().nv();
     TV v(nv);
     v.setZero();
@@ -269,14 +265,10 @@ struct FiniteDiffJoint
 
     Eigen::Matrix<double, 6, JointModel::NV> S(6, nv), S_ref(jdata.S().matrix());
 
-    std::cout << "M_ref: " << M_ref << std::endl;
-
     for (int k = 0; k < nv; ++k)
     {
       v[k] = eps;
       q_int = LieGroupType().integrate(q, v);
-      std::cout << "k: " << k << std::endl;
-      std::cout << "q_int: " << q_int << std::endl;
       jmodel.calc(jdata.derived(), q_int);
       SE3 M_int = jdata.M();
 
