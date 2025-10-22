@@ -188,23 +188,35 @@ namespace pinocchio
       data.M.rotation() << c1c2, -c1s2, s1,
                             c0 * s2 + c2 * s0 * s1, c0 * c2 - s0 * s1 * s2, -c1 * s0, 
                             -c0 * c2 * s1 + s0 * s2, c0 * s1 * s2 + c2 * s0, c0 * c1;
-
+      
       Scalar nx, ny, nz;
       nx = s1;
       ny = -s0 * c1;
       nz = c0 * c1;
 
       data.M.translation() << radius_a * nx, radius_b * ny, radius_c * nz;
+
+      Scalar dndotx_dqdot1, dndoty_dqdot0, dndoty_dqdot1, dndotz_dqdot0, dndotz_dqdot1;
+      dndotx_dqdot1 = c1;
+      dndoty_dqdot0 = - c0 * c1;
+      dndoty_dqdot1 = s0 * s1;
+      dndotz_dqdot0 = - c1 * s0;
+      dndotz_dqdot1 = - c0 * s1;
       
       Scalar S_11, S_21, S_31, S_12, S_22, S_32;
-      S_11 = c1 * (-radius_b * c0 * (c0 * s2 + c2 * s0 * s1) - radius_c * s0 * (- c0 * c2 * s1 + s0 * s2));
-      S_21 = c1 * (radius_b * c0 * (- c0 * c2 + s0 * s1 * s2) - radius_c * s0 * (c0 * s1 * s2 + c2 * s0));
-      S_31 = c0 * c1 * c1 * s0 * (radius_b - radius_c);
+      // S_11 = c1 * (-radius_b * c0 * (c0 * s2 + c2 * s0 * s1) - radius_c * s0 * (- c0 * c2 * s1 + s0 * s2));
+      S_11 = dndoty_dqdot0 * radius_b * (c0 *s2 + c2 * s0 * s1) + dndotz_dqdot0 * radius_c * (- c0 * c2 * s1 + s0 * s2);
+      // S_21 = c1 * (radius_b * c0 * (- c0 * c2 + s0 * s1 * s2) - radius_c * s0 * (c0 * s1 * s2 + c2 * s0));
+      S_21 = - dndoty_dqdot0 * radius_b * (- c0 * c2 + s0 * s1 * s2) + dndotz_dqdot0 * radius_c * (c0 * s1 * s2 + c2 * s0);
+      // S_31 = c0 * c1 * c1 * s0 * (radius_b - radius_c);
+      S_31 = c1 * (- dndoty_dqdot0 * radius_b * s0 + dndotz_dqdot0 * radius_c * c0);
 
-      S_12 = radius_a * c1c2 * c1 + radius_b * s0 * s1 * (c0 * s2 + c2 * s0 * s1) - radius_c * c0 * s1 * (- c0 * c2 * s1 + s0 * s2);
-      S_22 = - radius_a * c1s2 * c1 - radius_b * s0 * s1 * (- c0 * c2 + s0 * s1 * s2) - radius_c * c0 * s1 * (c0 * s1 * s2 + c2 * s0);
-      S_32 = c1 * s1 * (radius_a - radius_b * s0 * s0 - radius_c * c0 * c0);
-
+      //S_12 = radius_a * c1c2 * c1 + radius_b * s0 * s1 * (c0 * s2 + c2 * s0 * s1) - radius_c * c0 * s1 * (- c0 * c2 * s1 + s0 * s2);
+      S_12 = dndotx_dqdot1 * radius_a * c1 * c2 + dndoty_dqdot1 * radius_b * (c0 * s2 + c2 * s0 * s1) + dndotz_dqdot1 * radius_c * (- c0 * c2 * s1 + s0 * s2);
+      // S_22 = - radius_a * c1s2 * c1 - radius_b * s0 * s1 * (- c0 * c2 + s0 * s1 * s2) - radius_c * c0 * s1 * (c0 * s1 * s2 + c2 * s0);
+      S_22 = - dndotx_dqdot1 * radius_a * c1 * s2 - dndoty_dqdot1 * radius_b * (- c0 * c2 + s0 * s1 * s2) + dndotz_dqdot1 * radius_c * (c0 * s1 * s2 + c2 * s0);
+      //S_32 = c1 * s1 * (radius_a - radius_b * s0 * s0 - radius_c * c0 * c0);
+      S_32 = dndotx_dqdot1 * radius_a * s1 - dndoty_dqdot1 * radius_b * c1 * s0 + dndotz_dqdot1 * radius_c * c0 * c1;
 
       data.S.matrix() << S_11, S_12, Scalar(0),
                         S_21, S_22, Scalar(0),
@@ -315,28 +327,50 @@ namespace pinocchio
       Scalar c2, s2;
       SINCOS(data.joint_q(2), &s2, &c2);
 
-      // Common operations
+      //common operations
       Scalar c1c2, c1s2;
       c1c2 = c1 * c2;
       c1s2 = c1 * s2;
 
       data.M.rotation() << c1c2, -c1s2, s1,
-                           c0 * s2 + c2 * s0 * s1, c0 * c2 - s0 * s1 * s2, -c1 * s0, 
-                           -c0 * c2 * s1 + s0 * s2, c0 * s1 * s2 + c2 * s0, c0 * c1;
+                            c0 * s2 + c2 * s0 * s1, c0 * c2 - s0 * s1 * s2, -c1 * s0, 
+                            -c0 * c2 * s1 + s0 * s2, c0 * s1 * s2 + c2 * s0, c0 * c1;
 
       Scalar nx, ny, nz;
       nx = s1;
       ny = -s0 * c1;
       nz = c0 * c1;
 
-      data.M.translation() << Scalar(0.01) * nx, radius_b * ny, radius_c * nz;
+      data.M.translation() << radius_a * nx, radius_b * ny, radius_c * nz;
+
+     Scalar dndotx_dqdot1, dndoty_dqdot0, dndoty_dqdot1, dndotz_dqdot0, dndotz_dqdot1;
+      dndotx_dqdot1 = c1;
+      dndoty_dqdot0 = - c0 * c1;
+      dndoty_dqdot1 = s0 * s1;
+      dndotz_dqdot0 = - c1 * s0;
+      dndotz_dqdot1 = - c0 * s1;
       
-      data.S.matrix() << c1c2, s2, Scalar(0),
+      Scalar S_11, S_21, S_31, S_12, S_22, S_32;
+      // S_11 = c1 * (-radius_b * c0 * (c0 * s2 + c2 * s0 * s1) - radius_c * s0 * (- c0 * c2 * s1 + s0 * s2));
+      S_11 = dndoty_dqdot0 * radius_b * (c0 *s2 + c2 * s0 * s1) + dndotz_dqdot0 * radius_c * (- c0 * c2 * s1 + s0 * s2);
+      // S_21 = c1 * (radius_b * c0 * (- c0 * c2 + s0 * s1 * s2) - radius_c * s0 * (c0 * s1 * s2 + c2 * s0));
+      S_21 = - dndoty_dqdot0 * radius_b * (- c0 * c2 + s0 * s1 * s2) + dndotz_dqdot0 * radius_c * (c0 * s1 * s2 + c2 * s0);
+      // S_31 = c0 * c1 * c1 * s0 * (radius_b - radius_c);
+      S_31 = c1 * (- dndoty_dqdot0 * radius_b * s0 + dndotz_dqdot0 * radius_c * c0);
+
+      //S_12 = radius_a * c1c2 * c1 + radius_b * s0 * s1 * (c0 * s2 + c2 * s0 * s1) - radius_c * c0 * s1 * (- c0 * c2 * s1 + s0 * s2);
+      S_12 = dndotx_dqdot1 * radius_a * c1 * c2 + dndoty_dqdot1 * radius_b * (c0 * s2 + c2 * s0 * s1) + dndotz_dqdot1 * radius_c * (- c0 * c2 * s1 + s0 * s2);
+      // S_22 = - radius_a * c1s2 * c1 - radius_b * s0 * s1 * (- c0 * c2 + s0 * s1 * s2) - radius_c * c0 * s1 * (c0 * s1 * s2 + c2 * s0);
+      S_22 = - dndotx_dqdot1 * radius_a * c1 * s2 - dndoty_dqdot1 * radius_b * (- c0 * c2 + s0 * s1 * s2) + dndotz_dqdot1 * radius_c * (c0 * s1 * s2 + c2 * s0);
+      //S_32 = c1 * s1 * (radius_a - radius_b * s0 * s0 - radius_c * c0 * c0);
+      S_32 = dndotx_dqdot1 * radius_a * s1 - dndoty_dqdot1 * radius_b * c1 * s0 + dndotz_dqdot1 * radius_c * c0 * c1;
+
+      data.S.matrix() << S_11, S_12, Scalar(0),
+                        S_21, S_22, Scalar(0),
+                        S_31, S_32, Scalar(0),
+                        c1c2, s2, Scalar(0),
                         -c1s2, c2, Scalar(0),
-                        s1, Scalar(0), Scalar(1),
-                        c1 * (-radius_b * s0 * s1 + radius_c * c0 * c1 * s2), c1 * (radius_a - radius_c * c0 * c2), -radius_b * c1 * s0,
-                        -radius_a * s1 * s1 - radius_b * c0 * c1 + radius_c * c0 * c1 * c1 * c2, radius_b * s0 * s1 + radius_c * c0 * c1 * s2, radius_a * s1,
-                        c1 * (radius_a * s1 * s2 + radius_b * c1 * c2 * s0 - radius_c * s0), radius_a * c2 * s1 + radius_b * c1 * s0 * s2 + radius_c * c0 * s1, Scalar(0);
+                        s1, Scalar(0), Scalar(1);
 
       // Velocity part
       data.joint_v = vs.template segment<NV>(idx_v());
