@@ -196,9 +196,19 @@ namespace pinocchio
 
       data.M.translation() << radius_a * nx, radius_b * ny, radius_c * nz;
       
-      data.S.matrix() << c1 * (-radius_b * s0 * s1 + radius_c * c0 * c1 * s2), c1 * (radius_a - radius_c * c0 * c2), -radius_b * c1 * s0,
-                        -radius_a * s1 * s1 - radius_b * c0 * c1 + radius_c * c0 * c1 * c1 * c2, radius_b * s0 * s1 + radius_c * c0 * c1 * s2, radius_a * s1,
-                        c1 * (radius_a * s1 * s2 + radius_b * c1 * c2 * s0 - radius_c * s0), radius_a * c2 * s1 + radius_b * c1 * s0 * s2 + radius_c * c0 * s1, Scalar(0),
+      Scalar S_11, S_21, S_31, S_12, S_22, S_32;
+      S_11 = c1 * (-radius_b * c0 * (c0 * s2 + c2 * s0 * s1) - radius_c * s0 * (- c0 * c2 * s1 + s0 * s2));
+      S_21 = c1 * (radius_b * c0 * (- c0 * c2 + s0 * s1 * s2) - radius_c * s0 * (c0 * s1 * s2 + c2 * s0));
+      S_31 = c0 * c1 * c1 * s0 * (radius_b - radius_c);
+
+      S_12 = radius_a * c1c2 * c1 + radius_b * s0 * s1 * (c0 * s2 + c2 * s0 * s1) - radius_c * c0 * s1 * (- c0 * c2 * s1 + s0 * s2);
+      S_22 = - radius_a * c1s2 * c1 - radius_b * s0 * s1 * (- c0 * c2 + s0 * s1 * s2) - radius_c * c0 * s1 * (c0 * s1 * s2 + c2 * s0);
+      S_32 = c1 * s1 * (radius_a - radius_b * s0 * s0 - radius_c * c0 * c0);
+
+
+      data.S.matrix() << S_11, S_12, Scalar(0),
+                        S_21, S_22, Scalar(0),
+                        S_31, S_32, Scalar(0),
                         c1c2, s2, Scalar(0),
                         -c1s2, c2, Scalar(0),
                         s1, Scalar(0), Scalar(1);

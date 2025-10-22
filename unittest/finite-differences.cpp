@@ -171,8 +171,8 @@ struct init<pinocchio::JointModelEllipsoidTpl<Scalar, Options>>
   static JointModel run()
   {
     JointModel jmodel(Scalar(0.01),
-                      Scalar(0),
-                      Scalar(0)
+                      Scalar(0.02),
+                      Scalar(0.03)
                       );
 
     jmodel.setIndexes(0, 0, 0);
