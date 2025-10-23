@@ -236,7 +236,8 @@ BOOST_AUTO_TEST_CASE(vsSphericalZYX)
   q_s << 0.5, 1.2, -0.8;  // Z=0.5, Y=1.2, X=-0.8
   Eigen::VectorXd qd_s(3);
   qd_s << 0.1, -0.3, 0.7;  // ZYX angle velocities
-  
+  Eigen::VectorXd qdotdot_s(3);
+  qdotdot_s << 0.2, 0.1, -0.1;  // ZYX angle accelerations
   // Compute the rotation matrix from ZYX angles
   forwardKinematics(modelSphericalZYX, dataSphericalZYX, q_s, qd_s);
   const Matrix3 & R = dataSphericalZYX.oMi[1].rotation();
@@ -270,20 +271,20 @@ BOOST_AUTO_TEST_CASE(vsSphericalZYX)
     q_e(0) = 0.0;
     q_e(2) = std::atan2(R(1, 0), R(1, 1));
   }
-  
-  std::cout << "\n=== Configuration ===" << std::endl;
-  std::cout << "q_s (Z,Y,X): " << q_s.transpose() << std::endl;
-  std::cout << "q_e (X,Y,Z): " << q_e.transpose() << std::endl;
+
 
   // Get the motion subspace matrices (which give us the Jacobians)
   JointModelSphericalZYX jmodel_s;
+  jmodel_s.setIndexes(0, 0, 0);
+
   JointDataSphericalZYX jdata_s = jmodel_s.createData();
   jmodel_s.calc(jdata_s, q_s);
   
   JointModelEllipsoid jmodel_e(0, 0, 0);
+  jmodel_e.setIndexes(0, 0, 0);
+
   JointDataEllipsoid jdata_e = jmodel_e.createData();
   jmodel_e.calc(jdata_e, q_e);
-
 
   // The motion subspace S gives us: omega = S * v
   Matrix3 S_s = jdata_s.S.matrix().bottomRows<3>();  // Angular part
@@ -294,69 +295,78 @@ BOOST_AUTO_TEST_CASE(vsSphericalZYX)
   Eigen::Vector3d w_s = S_s * qd_s;
   Eigen::Vector3d w_e = S_e * qd_e;
   
-
-  std::cout << "\n=== Joint Velocities ===" << std::endl;
-  std::cout << "qd_s (joint velocities): " << qd_s.transpose() << std::endl;
-  std::cout << "qd_e (joint velocities): " << qd_e.transpose() << std::endl;
-  
-  std::cout << "\n=== Motion Subspace Matrices ===" << std::endl;
-  std::cout << "S_zyx (full 6x3):\n" << jdata_s.S.matrix() << std::endl;
-  std::cout << "\nS_xyz (full 6x3):\n" << jdata_e.S.matrix() << std::endl;
-  
-  std::cout << "\n=== Angular Velocities from Joint Velocities ===" << std::endl;
-  std::cout << "omega from ZYX (S_s * qd_s): " << w_s.transpose() << std::endl;
-  std::cout << "omega from XYZ (S_e * qd_e): " << w_e.transpose() << std::endl;
-  
   BOOST_CHECK(w_s.isApprox(w_e));
   std::cout << "✓ Angular velocities from joint velocities match" << std::endl;
 
   // Compute forward kinematics with the converted configurations
   forwardKinematics(modelEllipsoid, dataEllipsoid, q_e, qd_e);
   
-  // Also get the joint data to see body-frame velocities
-  JointDataEllipsoid jdata_e_fk = jmodel_e.createData();
-  JointDataEllipsoid jdata_e_fk2 = jmodel_e.createData();
-  jmodel_e.calc(jdata_e_fk, q_e, qd_e);
-  jmodel_e.calc(jdata_e_fk2, q_e);
+  // Getting S with q_e from the three calcs
+  JointDataEllipsoid jDataEllipsoidFK = jmodel_e.createData();
+  JointDataEllipsoid jDataEllipsoidFK2 = jmodel_e.createData();
+  JointDataEllipsoid jDataEllipsoidFK3 = jmodel_e.createData();
 
-  std::cout << "\n=== Motion Subspace Matrices after FK ===" << std::endl;
-  std::cout << "S_e calc q:\n" << jdata_e_fk.S.matrix() << std::endl;
-  std::cout << "\nS_e calc q v:\n" << jdata_e_fk2.S.matrix() << std::endl;
-  
-  BOOST_CHECK(jdata_e_fk.S.matrix().isApprox(jdata_e_fk2.S.matrix()));
-  std::cout << "✓ Motion subspace matrices match" << std::endl;
-  
-  JointDataSphericalZYX jdata_s_fk = jmodel_s.createData();
-  jmodel_s.calc(jdata_s_fk, q_s, qd_s);
+  jmodel_e.calc(jDataEllipsoidFK, q_e, qd_e);
+  jmodel_e.calc(jDataEllipsoidFK2, q_e);
+  jmodel_e.calc(jDataEllipsoidFK3, q_e);
+  jmodel_e.calc(jDataEllipsoidFK3, Blank(), qd_e);
+
+  BOOST_CHECK(jDataEllipsoidFK.S.matrix().isApprox(jDataEllipsoidFK2.S.matrix()));
+  BOOST_CHECK(jDataEllipsoidFK.S.matrix().isApprox(jDataEllipsoidFK3.S.matrix()));
+  std::cout << "✓ Motion subspace matrices match for the three calc(...) methods" << std::endl;
+
+  JointDataSphericalZYX jDataSphereFK = jmodel_s.createData();
+  jmodel_s.calc(jDataSphereFK, q_s, qd_s);
   
   std::cout << "\n=== Joint-frame velocities (S * v) ===" << std::endl;
-  Eigen::Matrix<double, 6, 1> joint_vel_e = jdata_e_fk.S.matrix() * qd_e;
-  std::cout << "joint_vel_e: " << joint_vel_e.transpose() << std::endl;
-  std::cout << "jdata_e_fk.v : " << jdata_e_fk.v.toVector().transpose() << std::endl;
-
-  
-
-  Eigen::Matrix<double, 6, 1> joint_vel_s = jdata_s_fk.S.matrix() * qd_s;
-  std::cout << "Ellipsoid (S_xyz * qd_e): " << joint_vel_e.transpose() << std::endl;
-  std::cout << "SphericalZYX (S_zyx * qd_s): " << joint_vel_s.transpose() << std::endl;
-
-  std::cout << "\n=== Rotation Matrices ===" << std::endl;
-  std::cout << "Ellipsoid rotation:\n" << dataEllipsoid.oMi[1].rotation() << std::endl;
-  std::cout << "\nSphericalZYX rotation:\n" << dataSphericalZYX.oMi[1].rotation() << std::endl;
-  
-  std::cout << "\n=== Translations ===" << std::endl;
-  std::cout << "Ellipsoid translation: " << dataEllipsoid.oMi[1].translation().transpose() << std::endl;
-  std::cout << "SphericalZYX translation: " << dataSphericalZYX.oMi[1].translation().transpose() << std::endl;
-  
-  std::cout << "\n=== Spatial Velocities ===" << std::endl;
-  std::cout << "Ellipsoid v:\n" << dataEllipsoid.v[1].toVector().transpose() << std::endl;
-  std::cout << "SphericalZYX v:\n" << dataSphericalZYX.v[1].toVector().transpose() << std::endl;
+  Eigen::Matrix<double, 6, 1> joint_vel_e = jDataEllipsoidFK.S.matrix() * qd_e;
+  Eigen::Matrix<double, 6, 1> manual_vel = jDataEllipsoidFK.S.matrix() * jDataEllipsoidFK.joint_v;
+  Eigen::Matrix<double, 6, 1> joint_vel_s = jDataSphereFK.S.matrix() * qd_s;
 
   BOOST_CHECK(dataEllipsoid.v[1].toVector().isApprox(dataSphericalZYX.v[1].toVector()));
   std::cout << "✓ Spatial velocities match" << std::endl;
   
   BOOST_CHECK(dataEllipsoid.oMi[1].isApprox(dataSphericalZYX.oMi[1]));
   std::cout << "✓ Full oMi[1] matches" << std::endl;
+
+ 
+  Matrix3 Sdot_e = jDataEllipsoidFK.Sdot.matrix().bottomRows<3>();  // Angular part
+
+  // The acceleration conversion formula: wdot_s = wdot_e
+  // S_s * qdotdot_s + c_s.angular() = Sdot_e * qd_e + S_e * qdotdot_e 
+  // Solving for qdotdot_e:
+  // S_e * qdotdot_e =  c_s.angular()+ S_s * qdotdot_s - Sdot_e * qd_e 
+  Eigen::Vector3d qdotdot_e = S_e.inverse() * ( S_s * qdotdot_s + jDataSphereFK.c.angular() - Sdot_e * qd_e );
+
+  // Verify angular accelerations match
+  Eigen::Vector3d wdot_s = jDataSphereFK.c.angular() + S_s * qdotdot_s ;
+  Eigen::Vector3d wdot_e = Sdot_e * qd_e + S_e * qdotdot_e ;
+  BOOST_CHECK(wdot_s.isApprox(wdot_e));
+  std::cout << "✓ Angular accelerations from joint accelerations match" << std::endl;
+
+
+  forwardKinematics(modelEllipsoid, dataEllipsoid, q_e, qd_e,qdotdot_e);
+  forwardKinematics(modelSphericalZYX, dataSphericalZYX, q_s, qd_s,qdotdot_s);
+
+  BOOST_CHECK(dataEllipsoid.a[1].toVector().isApprox(dataSphericalZYX.a[1].toVector()));
+  
+  // Test RNEA (Recursive Newton-Euler Algorithm)
+  std::cout << "\n=== RNEA Test ===" << std::endl;
+  
+  rnea(modelEllipsoid, dataEllipsoid, q_e, qd_e, qdotdot_e);
+  rnea(modelSphericalZYX, dataSphericalZYX, q_s, qd_s, qdotdot_s);
+
+  BOOST_CHECK(dataEllipsoid.f[1].isApprox(dataSphericalZYX.f[1]));
+  std::cout << "✓ RNEA f match" << std::endl;
+  
+  // Test ABA (Articulated-Body Algorithm)
+  std::cout << "\n=== ABA Test ===" << std::endl;
+  Eigen::VectorXd tau = Eigen::VectorXd::Ones(modelEllipsoid.nv);
+
+  Eigen::VectorXd aAbaEllipsoid = aba(modelEllipsoid, dataEllipsoid, q_e, qd_e, dataEllipsoid.tau, Convention::WORLD);
+
+  BOOST_CHECK(dataEllipsoid.ddq.isApprox(qdotdot_e));
+  std::cout << "✓ ABA computed accelerations match input accelerations" << std::endl;
 }
 
 BOOST_AUTO_TEST_SUITE_END()

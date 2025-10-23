@@ -618,6 +618,32 @@ BOOST_AUTO_TEST_CASE(test_reverse_spherical_zyx)
 }
 
 /// @brief test if reversing of a composite joint is correct.
+BOOST_AUTO_TEST_CASE(test_reverse_ellipsoid)
+{
+  using namespace pinocchio::graph;
+
+  ModelGraph g = buildReversableModelGraph(JointEllipsoid());
+  ///////////////// Model
+  BOOST_CHECK_THROW(buildModel(g, "body2", pinocchio::SE3::Identity()), std::invalid_argument);
+
+  //////////////////////////////////// Forward model
+  pinocchio::Model m_forward = buildModel(g, "body1", pinocchio::SE3::Identity());
+  pinocchio::Data d_f(m_forward);
+  // config vector forward model Ellipsoid
+  Eigen::Vector3d q(m_forward.nq);
+  q << M_PI / 4, M_PI, M_PI / 2;
+  pinocchio::framesForwardKinematics(m_forward, d_f, q);
+
+  cout << "Forward Ellipsoid oMf body2: \n"
+       << d_f.oMf[m_forward.getFrameId("body2", pinocchio::BODY)].matrix() << endl;
+  BOOST_CHECK(d_f.oMf[m_forward.getFrameId("body2", pinocchio::BODY)].isApprox(
+  // trouver une valeur à mettre dedans.
+  // todo après manger :)
+  ));
+}
+
+
+/// @brief test if reversing of a composite joint is correct.
 BOOST_AUTO_TEST_CASE(test_reverse_composite)
 {
   using namespace pinocchio::graph;
