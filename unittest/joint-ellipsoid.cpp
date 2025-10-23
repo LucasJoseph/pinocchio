@@ -277,10 +277,14 @@ BOOST_AUTO_TEST_CASE(vsSphericalZYX)
 
   // Get the motion subspace matrices (which give us the Jacobians)
   JointModelSphericalZYX jmodel_s;
+  jmodel_s.setIndexes(0, 0, 0);  // Set indices for standalone joint
+
   JointDataSphericalZYX jdata_s = jmodel_s.createData();
   jmodel_s.calc(jdata_s, q_s);
   
   JointModelEllipsoid jmodel_e(0, 0, 0);
+  jmodel_e.setIndexes(0, 0, 0);  // Set indices for standalone joint
+  
   JointDataEllipsoid jdata_e = jmodel_e.createData();
   jmodel_e.calc(jdata_e, q_e);
 
@@ -313,6 +317,7 @@ BOOST_AUTO_TEST_CASE(vsSphericalZYX)
   forwardKinematics(modelEllipsoid, dataEllipsoid, q_e, qd_e);
   
   // Getting S with q_e from the three calcs
+  // Note: jmodel_e already has indices set from earlier
   JointDataEllipsoid jdata_e_fk = jmodel_e.createData();
   JointDataEllipsoid jdata_e_fk2 = jmodel_e.createData();
   JointDataEllipsoid jdata_e_fk3 = jmodel_e.createData();
@@ -332,9 +337,14 @@ BOOST_AUTO_TEST_CASE(vsSphericalZYX)
   jmodel_s.calc(jdata_s_fk, q_s, qd_s);
   
   std::cout << "\n=== Joint-frame velocities (S * v) ===" << std::endl;
+  std::cout << "idx_v() for standalone joint: " << jmodel_e.idx_v() << std::endl;
+  std::cout << "qd_e: " << qd_e.transpose() << std::endl;
+  std::cout << "jdata_e_fk.joint_v: " << jdata_e_fk.joint_v.transpose() << std::endl;
   Eigen::Matrix<double, 6, 1> joint_vel_e = jdata_e_fk.S.matrix() * qd_e;
-  std::cout << "joint_vel_e: " << joint_vel_e.transpose() << std::endl;
-  std::cout << "jdata_e_fk.v : " << jdata_e_fk.v.toVector().transpose() << std::endl;
+  std::cout << "joint_vel_e (S * qd_e): " << joint_vel_e.transpose() << std::endl;
+  std::cout << "jdata_e_fk.v (computed): " << jdata_e_fk.v.toVector().transpose() << std::endl;
+  Eigen::Matrix<double, 6, 1> manual_vel = jdata_e_fk.S.matrix() * jdata_e_fk.joint_v;
+  std::cout << "S * jdata_e_fk.joint_v: " << manual_vel.transpose() << std::endl;
 
   Eigen::Matrix<double, 6, 1> joint_vel_s = jdata_s_fk.S.matrix() * qd_s;
   std::cout << "Ellipsoid (S_xyz * qd_e): " << joint_vel_e.transpose() << std::endl;
